@@ -97,9 +97,15 @@ run:
 connect:
 	mariadb --socket "{{ socket }}"
 
-# Invoke the MTR test runner. Parallelism is enabled by default.
-mtr *ARGS:
-	"{{ build_dir }}/mysql-test/mtr" --parallel={{ num_cpus() }} {{ ARGS }}
+# Shortcut for `mtr`
+alias t := mtr
+
+# Invoke the MTR test runner. Parallelism and three retries are enabled by default.
+mtr *ARGS: build
+	"{{ build_dir }}/mysql-test/mtr" \
+		--parallel={{ num_cpus() }} \
+		--retry=3 \
+		{{ ARGS }}
 
 # Symlink plugins to the relevant directory
 link-plugins:
