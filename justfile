@@ -97,9 +97,9 @@ run:
 connect:
 	mariadb --socket "{{ socket }}"
 
-# Invoke mtr
+# Invoke the MTR test runner. Parallelism is enabled by default.
 mtr *ARGS:
-	"{{ build_dir }}/mysql-test/mtr" {{ ARGS }}
+	"{{ build_dir }}/mysql-test/mtr" --parallel={{ num_cpus() }} {{ ARGS }}
 
 # Symlink plugins to the relevant directory
 link-plugins:
