@@ -37,7 +37,7 @@ configure *EXTRA_CMAKE_ARGS:
 	# Manually handle caching for this recipe
 	cachekey={{ sha256(EXTRA_CMAKE_ARGS + cmake_dir_args + cflags) }}
 	cachekey_file="{{ build_dir }}/cachekey-configure"
-	[ $(cat "$cachekey_file") = "$cachekey" ] &&
+	[ "$(cat "$cachekey_file" 2>/dev/null || echo "")" = "$cachekey" ] &&
 		echo "configure unchanged" &&
 		exit 0
 	
@@ -96,6 +96,10 @@ run:
 # Connect to the database at a socket
 connect:
 	mariadb --socket "{{ socket }}"
+
+# Invoke mtr
+mtr *ARGS:
+	"{{ build_dir }}/mysql-test/mtr" {{ ARGS }}
 
 # Symlink plugins to the relevant directory
 link-plugins:
