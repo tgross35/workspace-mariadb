@@ -38,7 +38,7 @@ configure *EXTRA_CMAKE_ARGS:
 	cachekey={{ sha256(EXTRA_CMAKE_ARGS + cmake_dir_args + cflags) }}
 	cachekey_file="{{ build_dir }}/cachekey-configure"
 	[ "$(cat "$cachekey_file" 2>/dev/null || echo "")" = "$cachekey" ] &&
-		echo "configure unchanged" &&
+		echo "skipping configuration (unchanged)" &&
 		exit 0
 	
 	cmake {{ cmake_dir_args }} -G Ninja \
@@ -63,8 +63,8 @@ configure *EXTRA_CMAKE_ARGS:
 # -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
 # -DRUN_ABI_CHECK=NO \
 
-build: configure
-	cmake --build "{{ build_dir }}"
+build *EXTRA_CMAKE_ARGS: configure
+	cmake --build "{{ build_dir }}" {{ EXTRA_CMAKE_ARGS }}
 
 # Just delete and recreate the build directory
 clean:
@@ -82,8 +82,8 @@ install-local: build
 	    --datadir={{ data_dir }} \
 	    --builddir={{ build_dir }}
 
-# Run the server (includes clevis test argument)
-run:
+# Run the server (includes gdb and clevis test argument)
+run *EXTRA_ARGS:
 	"{{ build_dir }}/sql/mariadbd" \
 		"--datadir={{ data_dir }}" \
 		"--socket={{ socket }}" \
@@ -91,7 +91,8 @@ run:
 		"--plugin-maturity=experimental" \
 		"--loose-clevis-key-management-tang-server=localhost:11697" \
 		--plugin-load \
-		"--gdb"
+		"--gdb" \
+		{{ EXTRA_ARGS }}
 
 # Connect to the database at a socket
 connect:
@@ -139,7 +140,10 @@ configure-clangd: configure
 	#!/usr/bin/env sh
 	dst="{{ build_dir }}/compile_commands.json"
 	if ! [ -f "$dst" ]; then
+		echo "creating compile_commands symlink"
 		ln -is "$dst" "{{ source_dir }}"
+	else
+		echo "skipping compile_commands symlink (already exists)"
 	fi
 
 # Write configuration for debugging via vscode
