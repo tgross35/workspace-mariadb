@@ -100,6 +100,7 @@ connect:
 
 # Shortcut for `mtr`
 alias t := mtr
+alias t-local := mtr-local
 
 # Invoke the MTR test runner. Parallelism and three retries are enabled by default.
 mtr *ARGS: build
@@ -107,6 +108,9 @@ mtr *ARGS: build
 		--parallel={{ num_cpus() }} \
 		--retry=3 \
 		{{ ARGS }}
+
+# Run mtr against a locally started server
+mtr-local *ARGS: build (mtr "--extern socket=" + socket)
 
 # Symlink plugins to the relevant directory
 link-plugins:
