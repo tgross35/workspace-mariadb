@@ -71,8 +71,12 @@ clean:
 	rm -rf "{{ build_dir }}"
 	mkdir "{{ build_dir }}"
 
+# Configure a directory
+_mkdir DIR:
+	mkdir -p "{{ DIR }}"
+
 # Perform install to a local database
-install-local: build
+install-local: build (_mkdir data_dir)
 	mkdir -p "{{ data_dir }}"
 	mkdir -p "{{ plugin_dir }}"
 	touch "{{ socket }}"
@@ -83,7 +87,7 @@ install-local: build
 	    --builddir={{ build_dir }}
 
 # Run the server (includes gdb and clevis test argument)
-run *EXTRA_ARGS:
+run *EXTRA_ARGS: (_mkdir data_dir)
 	"{{ build_dir }}/sql/mariadbd" \
 		"--datadir={{ data_dir }}" \
 		"--socket={{ socket }}" \
