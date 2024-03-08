@@ -13,6 +13,8 @@ build_dir := env("MARIA_BUILD_DIR", justfile_directory() / "build-mdb-server")
 data_dir := env("MARIA_DATA_DIR", justfile_directory() / "local-install" / "data")
 plugin_dir := env("MARIA_PLUGIN_DIR", justfile_directory() / "local-install" / "plugins")
 socket := env("MARIA_SOCKET", justfile_directory() / "local-install" / "mdb.sock")
+launcher := env("MARIA_COMPILER_LAUNCHER", "default")
+linker := env("MARIA_LD", "default")
 
 vscode_config_dir := source_dir / ".vscode"
 cmake_dir_args := '"-B' + build_dir + '" "-S' + source_dir + '"'
@@ -32,7 +34,7 @@ default:
 # Perform basic configuration
 configure *EXTRA_CMAKE_ARGS:
 	#!/bin/sh
-	set -eau
+	set -eaux
 	
 	# Manually handle caching for this recipe
 	cachekey={{ sha256(EXTRA_CMAKE_ARGS + cmake_dir_args + cflags) }}
@@ -40,27 +42,55 @@ configure *EXTRA_CMAKE_ARGS:
 	[ "$(cat "$cachekey_file" 2>/dev/null || echo "")" = "$cachekey" ] &&
 		echo "skipping configuration (unchanged)" &&
 		exit 0
+
+	launcher="{{ launcher }}"
+	linker="{{ linker }}"
+
+	if [ "$launcher" = "default" ]; then
+		if command -v sccache; then
+			launcher="sccache"
+		elif command -v ccache; then
+			launcher="ccache"
+		fi
+	fi
 	
+	if [ -n "$launcher" ]; then
+		echo "using launcher $launcher"
+		launcher_c_arg="-DCMAKE_C_COMPILER_LAUNCHER=$launcher"
+		launcher_cxx_arg="-DCMAKE_CXX_COMPILER_LAUNCHER=$launcher"
+	fi
+
+	if [ "$linker" = "default" ]; then
+		if command -v mold; then
+			linker="mold"
+		elif command -v lld; then
+			linker="ld"
+		fi
+	fi
+
+	if [ -n "$linker" ]; then
+		echo "using linker $linker"
+		linker_flag="-fuse-ld=$linker"
+	fi
+
 	cmake {{ cmake_dir_args }} -G Ninja \
 		-DCMAKE_BUILD_TYPE=Debug \
 		-DCMAKE_C_COMPILER=clang \
 		-DCMAKE_CXX_COMPILER=clang++ \
-		"-DCMAKE_C_FLAGS={{ cflags }}" \
-		"-DCMAKE_CXX_FLAGS={{ cflags }}" \
+		"-DCMAKE_C_FLAGS={{ cflags }} ${linker_flag:-}" \
+		"-DCMAKE_CXX_FLAGS={{ cflags }} ${linker_flag:-}" \
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=true \
 		-DPLUGIN_MROONGA=NO \
 		-DPLUGIN_ROCKSDB=NO \
 		-DPLUGIN_SPIDER=NO \
 		-DPLUGIN_SPHINX=NO \
 		-DPLUGIN_TOKUDB=NO \
+		${launcher_c_arg:-} \
+		${launcher_cxx_arg:-} \
 		{{ EXTRA_CMAKE_ARGS }}
 
 	printf "$cachekey" > "$cachekey_file"
 
-# -DCMAKE_C_FLAGS="-fuse-ld=mold"
-# -DCMAKE_CXX_FLAGS="-fuse-ld=mold"
-# -DCMAKE_C_COMPILER_LAUNCHER=sccache \
-# -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
 # -DRUN_ABI_CHECK=NO \
 
 build *EXTRA_CMAKE_ARGS: configure
@@ -114,7 +144,7 @@ mtr *ARGS: build
 		{{ ARGS }}
 
 # Run mtr against a locally started server
-mtr-local *ARGS: build (mtr "--extern socket=" + socket)
+mtr-local *ARGS: build (mtr "--extern socket=" + socket + " " + ARGS)
 
 # Symlink plugins to the relevant directory
 link-plugins:
@@ -147,11 +177,12 @@ link-plugins:
 configure-clangd: configure
 	#!/usr/bin/env sh
 	dst="{{ build_dir }}/compile_commands.json"
-	if ! [ -f "$dst" ]; then
+	echo $dst
+	if [ -f "$dst" ]; then
 		echo "creating compile_commands symlink"
 		ln -is "$dst" "{{ source_dir }}"
 	else
-		echo "skipping compile_commands symlink (already exists)"
+		echo "skipping compile_commands symlink (file does not exist)"
 	fi
 
 # Write configuration for debugging via vscode
