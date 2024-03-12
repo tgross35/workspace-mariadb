@@ -64,7 +64,7 @@ configure *EXTRA_CMAKE_ARGS:
 		if command -v mold; then
 			linker="mold"
 		elif command -v lld; then
-			linker="ld"
+			linker="lld"
 		fi
 	fi
 
